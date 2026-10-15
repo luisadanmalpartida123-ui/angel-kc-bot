@@ -1,0 +1,15 @@
+{
+  "name": "angel-kc-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
+    "axios": "^1.20.0",
+    "execa": "^9.6.1",
+    "fluent-ffmpeg": "^2.1.3",
+    "pino": "^8.21.0",
+    "qrcode-terminal": "^0.12.0",
+    "yt-dlp-exec": "^1.0.2"
+  }
+}
