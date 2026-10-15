@@ -4,16 +4,18 @@ console.debug = () => {};
 
 import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
 import pino from 'pino';
-import qrcode from 'qrcode-terminal';
 import axios from 'axios';
 import { execa } from 'execa';
 import fs from 'fs';
 import path from 'path';
 
+// ⚠️ ESCRIBE AQUÍ TU NÚMERO DE WHATSAPP CON CÓDIGO DE PAÍS (Ejemplo para Perú 51: '51987654321')
+const NUMERO_WHATSAPP = '51926432404';
+
 const ultimosGacha = {};
 const colecciones = {};
 
-// Detectar sistema operativo (Windows usa .exe local; Linux/Render usa el binario global)
+// Detectar sistema operativo
 const isWindows = process.platform === 'win32';
 const ytdlpPath = isWindows ? path.join(process.cwd(), 'yt-dlp.exe') : 'yt-dlp';
 
@@ -106,15 +108,22 @@ async function connectToWhatsApp() {
 
     sock.unofficial = true;
 
+    // Si aún no hay credenciales registradas, solicitar Código de Vinculación
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(NUMERO_WHATSAPP);
+                console.log('\n==================================================');
+                console.log(`🔑 CÓDIGO DE VINCULACIÓN PARA WHATSAPP: ${code}`);
+                console.log('==================================================\n');
+            } catch (err) {
+                console.error("Error al solicitar el código de vinculación:", err.message);
+            }
+        }, 3000);
+    }
+
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            console.log('\n========================================');
-            console.log('ESCANEA ESTE CÓDIGO QR EN TU WHATSAPP:');
-            console.log('========================================\n');
-            qrcode.generate(qr, { small: true });
-        }
+        const { connection, lastDisconnect } = update;
 
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
