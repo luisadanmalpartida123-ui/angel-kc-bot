@@ -116,7 +116,8 @@ async function connectToWhatsApp() {
         logger: pino({ level: 'fatal' }),
         auth: state,
         printQRInTerminal: false,
-        // Habilitar lectura amplia de mensajes para chats privados y grupos
+        syncFullHistory: true, // Sincronización completa de claves de cifrado para grupos
+        markOnlineOnConnect: true,
         shouldIgnoreJid: jid => false
     });
 
@@ -138,7 +139,7 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Solicitar código de vinculación si no está registrado
+    // Solicitar código de vinculación de 8 dígitos si no existe sesión registrada
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
@@ -157,7 +158,7 @@ async function connectToWhatsApp() {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
 
-        // Extraer el texto de cualquier tipo de mensaje (conversación, respuesta o imagen/video con texto)
+        // Extraer texto compatible con chats individuales, respuestas y publicaciones de grupos
         let body = 
             m.message.conversation || 
             m.message.extendedTextMessage?.text || 
@@ -165,9 +166,9 @@ async function connectToWhatsApp() {
             m.message.videoMessage?.caption || 
             '';
 
-        const sender = m.key.remoteJid; // JID del chat (Usuario o Grupo)
+        const sender = m.key.remoteJid;
         const isGroup = sender.endsWith('@g.us');
-        const participant = isGroup ? m.key.participant : sender; // Identifica quién envió el mensaje dentro del grupo
+        const participant = isGroup ? m.key.participant : sender;
         const texto = body.trim();
 
         if (!texto.startsWith('#')) return;
@@ -176,7 +177,7 @@ async function connectToWhatsApp() {
         const comando = args[0].toLowerCase();
         const textArgs = texto.split(' ').slice(1).join(' ');
 
-        // ID único para el sistema gacha (se diferencia por usuario incluso dentro de grupos)
+        // Identificador único para el sistema Gacha por usuario dentro del chat o grupo
         const userGachaKey = `${sender}_${participant}`;
 
         switch (comando) {
