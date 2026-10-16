@@ -1,13 +1,14 @@
 FROM node:18-slim
 
-# Instalar FFmpeg, Python y dependencias de Linux
+# Instalar dependencias esenciales de Linux, FFmpeg y Python
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Descargar la última versión nativa de yt-dlp para Linux (NO .exe)
+# Descargar e instalar la versión nativa más reciente de yt-dlp para Linux
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
