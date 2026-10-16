@@ -314,4 +314,103 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                     ];
 
                     if (isWindows) {
-                        ytdlpArgs.push('--ffmpeg-location',
+                        ytdlpArgs.push('--ffmpeg-location', process.cwd());
+                    }
+
+                    await execa(ytdlpPath, ytdlpArgs);
+
+                    const archivoGenerado = buscarArchivoPorPrefijo(tempPrefixVideo);
+
+                    if (archivoGenerado && fs.existsSync(archivoGenerado)) {
+                        const videoBuffer = fs.readFileSync(archivoGenerado);
+
+                        await sock.sendMessage(sender, {
+                            video: videoBuffer,
+                            caption: `🎬 Video procesado con éxito`,
+                            mimetype: 'video/mp4'
+                        }, { quoted: m });
+                    } else {
+                        throw new Error("No se pudo localizar el archivo de video generado.");
+                    }
+
+                } catch (err) {
+                    console.error("❌ ERROR DETALLADO EN #video:", err.stderr || err.message || err);
+                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video en Render.' }, { quoted: m });
+                } finally {
+                    limpiarArchivosTemporales(tempPrefixVideo);
+                }
+                break;
+
+            case 'ia':
+            case 'imagen':
+                if (!textArgs) {
+                    await sock.sendMessage(sender, { text: '⚠️ Escribe una descripción de la imagen. Ejemplo:\n*#ia kasane teto anime style*' }, { quoted: m });
+                    return;
+                }
+
+                try {
+                    const promptEncoded = encodeURIComponent(textArgs);
+                    const imageUrl = `https://image.pollinations.ai/prompt/${promptEncoded}?width=1024&height=1024&seed=${Math.floor(Math.random() * 99999)}&nologo=true`;
+
+                    await sock.sendMessage(sender, {
+                        image: { url: imageUrl },
+                        caption: `🎨 *Imagen generada por IA*\n\n📝 Prompt: _${textArgs}_`
+                    }, { quoted: m });
+                } catch (err) {
+                    console.error("Error en #ia:", err);
+                    await sock.sendMessage(sender, { text: '❌ No se pudo generar la imagen por IA.' }, { quoted: m });
+                }
+                break;
+
+            case 'gacha':
+                const personaje = await obtenerPersonajeAniList();
+                ultimosGacha[userGachaKey] = personaje;
+
+                const textoGacha = `✨ ¡Has invocado el gacha!\n\nHas obtenido a:\n👤 *${personaje.nombre}*\n📺 Anime: ${personaje.anime}\nRareza: ${personaje.rareza}\n\nEscribe *#claim* para agregarlo a tu colección.`;
+
+                await sock.sendMessage(sender, { 
+                    image: { url: personaje.imagen },
+                    caption: textoGacha
+                }, { quoted: m });
+                break;
+
+            case 'claim':
+                const ultimo = ultimosGacha[userGachaKey];
+                if (!ultimo) {
+                    await sock.sendMessage(sender, { text: '❌ No tienes ningún personaje pendiente por reclamar. Usa primero *#gacha*.' }, { quoted: m });
+                    return;
+                }
+
+                if (!colecciones[userGachaKey]) {
+                    colecciones[userGachaKey] = [];
+                }
+
+                colecciones[userGachaKey].push(ultimo);
+                delete ultimosGacha[userGachaKey];
+
+                await sock.sendMessage(sender, { text: `🎉 ¡Has reclamado a *${ultimo.nombre}* con éxito!` }, { quoted: m });
+                break;
+
+            case 'mi-coleccion':
+                const misPersonajes = colecciones[userGachaKey];
+                if (!misPersonajes || misPersonajes.length === 0) {
+                    await sock.sendMessage(sender, { text: '📂 Tu colección está vacía. Usa *#gacha* y luego *#claim* para conseguir personajes.' }, { quoted: m });
+                    return;
+                }
+
+                let listaMsg = `📂 *TU COLECCIÓN DE PERSONAJES*:\n\n`;
+                misPersonajes.forEach((p, index) => {
+                    listaMsg += `${index + 1}. *${p.nombre}* (${p.anime}) - ${p.rareza}\n`;
+                });
+
+                await sock.sendMessage(sender, { text: listaMsg }, { quoted: m });
+                break;
+
+            default:
+                await sock.sendMessage(sender, { text: '❌ Comando no reconocido. Escribe *#menu* para ver la lista de comandos disponibles.' }, { quoted: m });
+                break;
+        }
+    });
+}
+
+connectToWhatsApp();
