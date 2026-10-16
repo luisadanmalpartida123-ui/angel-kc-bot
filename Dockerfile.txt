@@ -1,22 +1,23 @@
 FROM node:18-slim
 
-# Instalar FFmpeg, Python y utilidades del sistema para Linux
+# Instalar FFmpeg, Python y dependencias de Linux
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3 \
     curl \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar la versión ejecutable nativa de yt-dlp para Linux
+# Descargar la última versión nativa de yt-dlp para Linux (NO .exe)
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
     && chmod a+rx /usr/local/bin/yt-dlp
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
 COPY package*.json ./
 RUN npm install
 
 COPY . .
+
+EXPOSE 3000
 
 CMD ["node", "index.js"]
