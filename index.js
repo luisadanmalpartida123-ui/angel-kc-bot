@@ -115,7 +115,9 @@ async function connectToWhatsApp() {
     const sock = makeWASocket({
         logger: pino({ level: 'fatal' }),
         auth: state,
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        // Habilitar lectura amplia de mensajes para chats privados y grupos
+        shouldIgnoreJid: jid => false
     });
 
     sock.unofficial = true;
@@ -136,7 +138,7 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Solicitar código de vinculación con retardo para permitir la conexión del socket
+    // Solicitar código de vinculación si no está registrado
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
@@ -155,16 +157,17 @@ async function connectToWhatsApp() {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
 
-        const messageType = Object.keys(m.message)[0];
-        let body = '';
+        // Extraer el texto de cualquier tipo de mensaje (conversación, respuesta o imagen/video con texto)
+        let body = 
+            m.message.conversation || 
+            m.message.extendedTextMessage?.text || 
+            m.message.imageMessage?.caption || 
+            m.message.videoMessage?.caption || 
+            '';
 
-        if (messageType === 'conversation') {
-            body = m.message.conversation;
-        } else if (messageType === 'extendedTextMessage') {
-            body = m.message.extendedTextMessage.text;
-        }
-
-        const sender = m.key.remoteJid;
+        const sender = m.key.remoteJid; // JID del chat (Usuario o Grupo)
+        const isGroup = sender.endsWith('@g.us');
+        const participant = isGroup ? m.key.participant : sender; // Identifica quién envió el mensaje dentro del grupo
         const texto = body.trim();
 
         if (!texto.startsWith('#')) return;
@@ -173,14 +176,17 @@ async function connectToWhatsApp() {
         const comando = args[0].toLowerCase();
         const textArgs = texto.split(' ').slice(1).join(' ');
 
+        // ID único para el sistema gacha (se diferencia por usuario incluso dentro de grupos)
+        const userGachaKey = `${sender}_${participant}`;
+
         switch (comando) {
             case 'ping':
-                await sock.sendMessage(sender, { text: 'Pong! 🏓 La velocidad del bot es óptima.' });
+                await sock.sendMessage(sender, { text: 'Pong! 🏓 La velocidad del bot es óptima.' }, { quoted: m });
                 break;
 
             case 'dado':
                 const resultadoDado = Math.floor(Math.random() * 6) + 1;
-                await sock.sendMessage(sender, { text: `🎲 Lanzaste el dado y salió: *${resultadoDado}*` });
+                await sock.sendMessage(sender, { text: `🎲 Lanzaste el dado y salió: *${resultadoDado}*` }, { quoted: m });
                 break;
 
             case 'menu':
@@ -208,18 +214,18 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                 await sock.sendMessage(sender, {
                     image: { url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQVzIr811dwStPuHgUO0BdXAPMdDI93c_Qzy_Ct_lV64A&s' },
                     caption: menuTexto
-                });
+                }, { quoted: m });
                 break;
 
             case 'play':
                 if (!textArgs) {
-                    await sock.sendMessage(sender, { text: '⚠️ Ingresa el nombre o enlace de la canción. Ejemplo:\n*#play Kasane Teto Territory*' });
+                    await sock.sendMessage(sender, { text: '⚠️ Ingresa el nombre o enlace de la canción. Ejemplo:\n*#play Kasane Teto Territory*' }, { quoted: m });
                     return;
                 }
 
                 const tempPrefixAudio = `temp_audio_${Date.now()}`;
                 try {
-                    await sock.sendMessage(sender, { text: '🎵 Procesando audio, por favor espera...' });
+                    await sock.sendMessage(sender, { text: '🎵 Procesando audio, por favor espera...' }, { quoted: m });
 
                     let query = textArgs.startsWith('http') ? textArgs : `ytsearch1:${textArgs}`;
                     const outputTemplate = path.join(process.cwd(), `${tempPrefixAudio}.%(ext)s`);
@@ -247,14 +253,14 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                             audio: audioBuffer,
                             mimetype: 'audio/mp4',
                             fileName: `${textArgs.slice(0, 20)}.m4a`
-                        });
+                        }, { quoted: m });
                     } else {
                         throw new Error("No se pudo localizar el archivo de audio.");
                     }
 
                 } catch (err) {
                     console.error("❌ ERROR EN #play:", err.stderr || err.message || err);
-                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el audio.' });
+                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el audio.' }, { quoted: m });
                 } finally {
                     limpiarArchivosTemporales(tempPrefixAudio);
                 }
@@ -262,13 +268,13 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 
             case 'video':
                 if (!textArgs) {
-                    await sock.sendMessage(sender, { text: '⚠️ Ingresa el nombre o enlace del video. Ejemplo:\n*#video trailer jujutsu kaisen*' });
+                    await sock.sendMessage(sender, { text: '⚠️ Ingresa el nombre o enlace del video. Ejemplo:\n*#video trailer jujutsu kaisen*' }, { quoted: m });
                     return;
                 }
 
                 const tempPrefixVideo = `temp_video_${Date.now()}`;
                 try {
-                    await sock.sendMessage(sender, { text: '🎥 Procesando y optimizando video para WhatsApp, por favor espera...' });
+                    await sock.sendMessage(sender, { text: '🎥 Procesando y optimizando video para WhatsApp, por favor espera...' }, { quoted: m });
 
                     let query = textArgs.startsWith('http') ? textArgs : `ytsearch1:${textArgs}`;
                     const outputTemplate = path.join(process.cwd(), `${tempPrefixVideo}.%(ext)s`);
@@ -298,14 +304,14 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                             video: videoBuffer,
                             caption: `🎬 Video procesado correctamente con audio`,
                             mimetype: 'video/mp4'
-                        });
+                        }, { quoted: m });
                     } else {
                         throw new Error("No se pudo localizar el archivo de video generado.");
                     }
 
                 } catch (err) {
                     console.error("❌ ERROR EN #video:", err.stderr || err.message || err);
-                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video.' });
+                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video.' }, { quoted: m });
                 } finally {
                     limpiarArchivosTemporales(tempPrefixVideo);
                 }
@@ -314,7 +320,7 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
             case 'ia':
             case 'imagen':
                 if (!textArgs) {
-                    await sock.sendMessage(sender, { text: '⚠️ Escribe una descripción de la imagen. Ejemplo:\n*#ia kasane teto anime style*' });
+                    await sock.sendMessage(sender, { text: '⚠️ Escribe una descripción de la imagen. Ejemplo:\n*#ia kasane teto anime style*' }, { quoted: m });
                     return;
                 }
 
@@ -325,46 +331,46 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                     await sock.sendMessage(sender, {
                         image: { url: imageUrl },
                         caption: `🎨 *Imagen generada por IA*\n\n📝 Prompt: _${textArgs}_`
-                    });
+                    }, { quoted: m });
                 } catch (err) {
                     console.error("Error en #ia:", err);
-                    await sock.sendMessage(sender, { text: '❌ No se pudo generar la imagen por IA.' });
+                    await sock.sendMessage(sender, { text: '❌ No se pudo generar la imagen por IA.' }, { quoted: m });
                 }
                 break;
 
             case 'gacha':
                 const personaje = await obtenerPersonajeAniList();
-                ultimosGacha[sender] = personaje;
+                ultimosGacha[userGachaKey] = personaje;
 
                 const textoGacha = `✨ ¡Has invocado el gacha!\n\nHas obtenido a:\n👤 *${personaje.nombre}*\n📺 Anime: ${personaje.anime}\nRareza: ${personaje.rareza}\n\nEscribe *#claim* para agregarlo a tu colección.`;
 
                 await sock.sendMessage(sender, { 
                     image: { url: personaje.imagen },
                     caption: textoGacha
-                });
+                }, { quoted: m });
                 break;
 
             case 'claim':
-                const ultimo = ultimosGacha[sender];
+                const ultimo = ultimosGacha[userGachaKey];
                 if (!ultimo) {
-                    await sock.sendMessage(sender, { text: '❌ No tienes ningún personaje pendiente por reclamar. Usa primero *#gacha*.' });
+                    await sock.sendMessage(sender, { text: '❌ No tienes ningún personaje pendiente por reclamar. Usa primero *#gacha*.' }, { quoted: m });
                     return;
                 }
 
-                if (!colecciones[sender]) {
-                    colecciones[sender] = [];
+                if (!colecciones[userGachaKey]) {
+                    colecciones[userGachaKey] = [];
                 }
 
-                colecciones[sender].push(ultimo);
-                delete ultimosGacha[sender];
+                colecciones[userGachaKey].push(ultimo);
+                delete ultimosGacha[userGachaKey];
 
-                await sock.sendMessage(sender, { text: `🎉 ¡Has reclamado a *${ultimo.nombre}* con éxito!` });
+                await sock.sendMessage(sender, { text: `🎉 ¡Has reclamado a *${ultimo.nombre}* con éxito!` }, { quoted: m });
                 break;
 
             case 'mi-coleccion':
-                const misPersonajes = colecciones[sender];
+                const misPersonajes = colecciones[userGachaKey];
                 if (!misPersonajes || misPersonajes.length === 0) {
-                    await sock.sendMessage(sender, { text: '📂 Tu colección está vacía. Usa *#gacha* y luego *#claim* para conseguir personajes.' });
+                    await sock.sendMessage(sender, { text: '📂 Tu colección está vacía. Usa *#gacha* y luego *#claim* para conseguir personajes.' }, { quoted: m });
                     return;
                 }
 
@@ -373,11 +379,11 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                     listaMsg += `${index + 1}. *${p.nombre}* (${p.anime}) - ${p.rareza}\n`;
                 });
 
-                await sock.sendMessage(sender, { text: listaMsg });
+                await sock.sendMessage(sender, { text: listaMsg }, { quoted: m });
                 break;
 
             default:
-                await sock.sendMessage(sender, { text: '❌ Comando no reconocido. Escribe *#menu* para ver la lista de comandos disponibles.' });
+                await sock.sendMessage(sender, { text: '❌ Comando no reconocido. Escribe *#menu* para ver la lista de comandos disponibles.' }, { quoted: m });
                 break;
         }
     });
