@@ -9,17 +9,17 @@ import { execa } from 'execa';
 import fs from 'fs';
 import path from 'path';
 
-// ⚠️ ESCRIBE AQUÍ TU NÚMERO DE WHATSAPP CON CÓDIGO DE PAÍS (Ejemplo para Perú 51: '51987654321')
-const NUMERO_WHATSAPP = '51926432404';
+// ⚠️ INGRESA AQUÍ TU NÚMERO DE WHATSAPP (Ejemplo para Perú: '51987654321')
+const NUMERO_WHATSAPP = '51XXXXXXXXX';
 
 const ultimosGacha = {};
 const colecciones = {};
 
-// Detectar sistema operativo
+// Detectar automáticamente el entorno (Windows local vs Linux/Docker en Render)
 const isWindows = process.platform === 'win32';
 const ytdlpPath = isWindows ? path.join(process.cwd(), 'yt-dlp.exe') : 'yt-dlp';
 
-// Obtener personaje desde AniList
+// Función para obtener personaje desde AniList
 async function obtenerPersonajeAniList() {
     const randomPage = Math.floor(Math.random() * 100) + 1;
 
@@ -75,12 +75,14 @@ async function obtenerPersonajeAniList() {
     }
 }
 
+// Búsqueda de archivos generados por prefijo
 function buscarArchivoPorPrefijo(prefix) {
     const files = fs.readdirSync(process.cwd());
     const found = files.find(file => file.startsWith(prefix));
     return found ? path.join(process.cwd(), found) : null;
 }
 
+// Limpieza automática de temporales
 function limpiarArchivosTemporales(prefix) {
     try {
         const files = fs.readdirSync(process.cwd());
@@ -108,7 +110,7 @@ async function connectToWhatsApp() {
 
     sock.unofficial = true;
 
-    // Si aún no hay credenciales registradas, solicitar Código de Vinculación
+    // Generar código de vinculación de 8 dígitos si no existe sesión
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
