@@ -1,4 +1,4 @@
-// Silenciar warnings de Node y logs de depuración
+// Silenciar warnings de Node y logs de depuración no esenciales
 process.env.NODE_NO_WARNINGS = '1';
 console.debug = () => {};
 
@@ -13,23 +13,42 @@ import http from 'http';
 // Número de WhatsApp configurado (Perú +51)
 const NUMERO_WHATSAPP = '51926342404';
 
-// Servidor HTTP básico para mantener el servicio activo en Render
+// -------------------------------------------------------------
+// SERVIDOR HTTP & AUTO-PING PARA MANTENER ACTIVO RENDER 24/7
+// -------------------------------------------------------------
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Angel-KC Bot esta activo 24/7 en Render!\n');
+    res.end('Angel-KC Bot activo 24/7 en Render!\n');
 }).listen(PORT, () => {
     console.log(`🌐 Servidor HTTP activo escuchando en el puerto ${PORT}`);
+
+    // Auto-ping interno cada 5 minutos para evitar el apagado de Render
+    const selfUrl = process.env.RENDER_EXTERNAL_URL;
+    if (selfUrl) {
+        setInterval(async () => {
+            try {
+                await axios.get(selfUrl);
+                console.log('🔄 Auto-ping enviado exitosamente a Render.');
+            } catch (err) {
+                console.error('⚠️ Error en auto-ping:', err.message);
+            }
+        }, 5 * 60 * 1000); // 5 minutos
+    } else {
+        console.log('⚠️ RENDER_EXTERNAL_URL no está configurada en las Variables de Entorno.');
+    }
 });
+
+// -------------------------------------------------------------
+// CONFIGURACIÓN DE RUTAS SEGÚN SISTEMA OPERATIVO (WINDOWS vs LINUX)
+// -------------------------------------------------------------
+const isWindows = process.platform === 'win32';
+const ytdlpPath = isWindows ? path.join(process.cwd(), 'yt-dlp.exe') : 'yt-dlp';
 
 const ultimosGacha = {};
 const colecciones = {};
 
-// Detectar automáticamente el entorno (Windows local vs Linux/Docker en Render)
-const isWindows = process.platform === 'win32';
-const ytdlpPath = isWindows ? path.join(process.cwd(), 'yt-dlp.exe') : 'yt-dlp';
-
-// Función para obtener personaje desde AniList
+// Función para obtener personaje desde AniList API
 async function obtenerPersonajeAniList() {
     const randomPage = Math.floor(Math.random() * 100) + 1;
 
@@ -105,10 +124,13 @@ function limpiarArchivosTemporales(prefix) {
             }
         });
     } catch (e) {
-        console.error("Error al limpiar carpeta:", e.message);
+        console.error("Error al limpiar archivos temporales:", e.message);
     }
 }
 
+// -------------------------------------------------------------
+// BOT PRINCIPAL DE WHATSAPP (BAILEYS)
+// -------------------------------------------------------------
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
 
@@ -202,12 +224,12 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 📥 *DESCARGAS & CREATIVIDAD:*
   • #play <nombre/link> : Descarga música
   • #video <nombre/link> : Descarga un video en MP4 con audio
-  • #ia <descripción> : Genera una imagen con Inteligencia Artificial
+  • #ia <descripción> : Genera una imagen con IA
 
 🍔 *APARTADO GACHA (ANIME):*
   • #gacha : Tira por un personaje al azar
-  • #claim : Reclama el personaje obtenido en el último #gacha
-  • #mi-coleccion : Revisa tu lista de personajes reclamados`;
+  • #claim : Reclama el personaje del último #gacha
+  • #mi-coleccion : Revisa tu lista de personajes`;
 
                 await sock.sendMessage(sender, {
                     image: { url: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQVzIr811dwStPuHgUO0BdXAPMdDI93c_Qzy_Ct_lV64A&s' },
@@ -230,9 +252,10 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 
                     const ytdlpArgs = [
                         query,
-                        '-f', 'ba[ext=m4a]/ba/bestaudio',
+                        '-f', 'ba[ext=m4a]/ba/bestaudio/best',
                         '--extractor-args', 'youtube:player_client=android,ios,web',
                         '--no-playlist',
+                        '--no-warnings',
                         '-o', outputTemplate
                     ];
 
@@ -253,12 +276,12 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                             fileName: `${textArgs.slice(0, 20)}.m4a`
                         }, { quoted: m });
                     } else {
-                        throw new Error("No se pudo localizar el archivo de audio.");
+                        throw new Error("No se pudo localizar el archivo de audio descargado.");
                     }
 
                 } catch (err) {
-                    console.error("❌ ERROR EN #play:", err.stderr || err.message || err);
-                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el audio.' }, { quoted: m });
+                    console.error("❌ ERROR DETALLADO EN #play:", err.stderr || err.message || err);
+                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el audio en Render.' }, { quoted: m });
                 } finally {
                     limpiarArchivosTemporales(tempPrefixAudio);
                 }
@@ -277,7 +300,6 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                     let query = textArgs.startsWith('http') ? textArgs : `ytsearch1:${textArgs}`;
                     const outputTemplate = path.join(process.cwd(), `${tempPrefixVideo}.%(ext)s`);
 
-                    // Se limita la resolución a <=720p para evitar agotar la memoria RAM de Render
                     const ytdlpArgs = [
                         query,
                         '-f', 'bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720]/best',
@@ -285,6 +307,7 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                         '--extractor-args', 'youtube:player_client=android,ios,web',
                         '--postprocessor-args', 'ffmpeg:-c:v copy -c:a aac -ac 2 -ar 44100 -movflags +faststart',
                         '--no-playlist',
+                        '--no-warnings',
                         '-o', outputTemplate
                     ];
 
@@ -309,8 +332,8 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
                     }
 
                 } catch (err) {
-                    console.error("❌ ERROR EN #video:", err.stderr || err.message || err);
-                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video o excede el límite de memoria.' }, { quoted: m });
+                    console.error("❌ ERROR DETALLADO EN #video:", err.stderr || err.message || err);
+                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video en Render.' }, { quoted: m });
                 } finally {
                     limpiarArchivosTemporales(tempPrefixVideo);
                 }
