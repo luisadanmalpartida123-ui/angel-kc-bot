@@ -8,9 +8,19 @@ import axios from 'axios';
 import { execa } from 'execa';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
 
-// ⚠️ INGRESA AQUÍ TU NÚMERO DE WHATSAPP (Ejemplo para Perú: '51987654321')
-const NUMERO_WHATSAPP = '51XXXXXXXXX';
+// Número de WhatsApp configurado (Perú +51)
+const NUMERO_WHATSAPP = '51926342404';
+
+// Servidor HTTP básico para mantener el servicio activo en Render
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Angel-KC Bot esta activo 24/7 en Render!\n');
+}).listen(PORT, () => {
+    console.log(`🌐 Servidor HTTP activo escuchando en el puerto ${PORT}`);
+});
 
 const ultimosGacha = {};
 const colecciones = {};
