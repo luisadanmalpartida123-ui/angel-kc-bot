@@ -120,20 +120,6 @@ async function connectToWhatsApp() {
 
     sock.unofficial = true;
 
-    // Generar código de vinculación de 8 dígitos si no existe sesión
-    if (!sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(NUMERO_WHATSAPP);
-                console.log('\n==================================================');
-                console.log(`🔑 CÓDIGO DE VINCULACIÓN PARA WHATSAPP: ${code}`);
-                console.log('==================================================\n');
-            } catch (err) {
-                console.error("Error al solicitar el código de vinculación:", err.message);
-            }
-        }, 3000);
-    }
-
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
 
@@ -149,6 +135,21 @@ async function connectToWhatsApp() {
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    // Solicitar código de vinculación con retardo para permitir la conexión del socket
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                console.log('Solicitando código de vinculación...');
+                const code = await sock.requestPairingCode(NUMERO_WHATSAPP);
+                console.log('\n==================================================');
+                console.log(`🔑 CÓDIGO DE VINCULACIÓN PARA WHATSAPP: ${code}`);
+                console.log('==================================================\n');
+            } catch (err) {
+                console.error("Error al solicitar el código de vinculación:", err.message);
+            }
+        }, 6000);
+    }
 
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const m = messages[0];
