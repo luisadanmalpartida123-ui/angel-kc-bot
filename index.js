@@ -116,7 +116,7 @@ async function connectToWhatsApp() {
         logger: pino({ level: 'fatal' }),
         auth: state,
         printQRInTerminal: false,
-        syncFullHistory: true, // Sincronización completa de claves de cifrado para grupos
+        syncFullHistory: true,
         markOnlineOnConnect: true,
         shouldIgnoreJid: jid => false
     });
@@ -139,7 +139,6 @@ async function connectToWhatsApp() {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Solicitar código de vinculación de 8 dígitos si no existe sesión registrada
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
@@ -158,7 +157,6 @@ async function connectToWhatsApp() {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
 
-        // Extraer texto compatible con chats individuales, respuestas y publicaciones de grupos
         let body = 
             m.message.conversation || 
             m.message.extendedTextMessage?.text || 
@@ -177,7 +175,6 @@ async function connectToWhatsApp() {
         const comando = args[0].toLowerCase();
         const textArgs = texto.split(' ').slice(1).join(' ');
 
-        // Identificador único para el sistema Gacha por usuario dentro del chat o grupo
         const userGachaKey = `${sender}_${participant}`;
 
         switch (comando) {
@@ -233,8 +230,8 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 
                     const ytdlpArgs = [
                         query,
-                        '-f', 'ba[ext=m4a]/ba/b',
-                        '--extractor-args', 'youtube:player_client=android,web',
+                        '-f', 'ba[ext=m4a]/ba/bestaudio',
+                        '--extractor-args', 'youtube:player_client=android,ios,web',
                         '--no-playlist',
                         '-o', outputTemplate
                     ];
@@ -275,16 +272,17 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 
                 const tempPrefixVideo = `temp_video_${Date.now()}`;
                 try {
-                    await sock.sendMessage(sender, { text: '🎥 Procesando y optimizando video para WhatsApp, por favor espera...' }, { quoted: m });
+                    await sock.sendMessage(sender, { text: '🎥 Procesando video (máx 720p), por favor espera...' }, { quoted: m });
 
                     let query = textArgs.startsWith('http') ? textArgs : `ytsearch1:${textArgs}`;
                     const outputTemplate = path.join(process.cwd(), `${tempPrefixVideo}.%(ext)s`);
 
+                    // Se limita la resolución a <=720p para evitar agotar la memoria RAM de Render
                     const ytdlpArgs = [
                         query,
-                        '-f', 'bv*[vcodec^=avc1]+ba[ext=m4a]/bv*[ext=mp4]+ba/b[ext=mp4]/best',
+                        '-f', 'bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/bv*[height<=720]+ba/b[height<=720]/best',
                         '--merge-output-format', 'mp4',
-                        '--extractor-args', 'youtube:player_client=android,web',
+                        '--extractor-args', 'youtube:player_client=android,ios,web',
                         '--postprocessor-args', 'ffmpeg:-c:v copy -c:a aac -ac 2 -ar 44100 -movflags +faststart',
                         '--no-playlist',
                         '-o', outputTemplate
@@ -303,7 +301,7 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 
                         await sock.sendMessage(sender, {
                             video: videoBuffer,
-                            caption: `🎬 Video procesado correctamente con audio`,
+                            caption: `🎬 Video procesado con éxito`,
                             mimetype: 'video/mp4'
                         }, { quoted: m });
                     } else {
@@ -312,7 +310,7 @@ AQUÍ TIENES LA LISTA DE COMANDOS:
 
                 } catch (err) {
                     console.error("❌ ERROR EN #video:", err.stderr || err.message || err);
-                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video.' }, { quoted: m });
+                    await sock.sendMessage(sender, { text: '❌ Ocurrió un error al procesar el video o excede el límite de memoria.' }, { quoted: m });
                 } finally {
                     limpiarArchivosTemporales(tempPrefixVideo);
                 }
